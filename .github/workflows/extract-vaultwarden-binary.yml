@@ -25,36 +25,94 @@ jobs:
       #     username: ${{ secrets.DOCKER_USERNAME }}
       #     password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Step 3: 拉取 Vaultwarden Docker 镜像
+      # Step 3: 获取最新版本号
+      - name: Get GitHub release version
+        id: get_version
+        run: |
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/dani-garcia/vaultwarden/releases/latest | jq -r .tag_name)
+          echo "Latest Vaultwarden release version: $LATEST_VERSION"
+          echo "::set-output name=latest_version::$LATEST_VERSION"  # 设置版本号为输出变量
+
+      # Step 4: 获取当前版本号
+      - name: Check or create vaultwarden_version file with default
+        id: read_version
+        run: |
+          # 检查文件是否存在，存在则读取，不存在则创建
+          if [ -f vaultwarden_version ]; then
+            CURRENT_VERSION=$(cat vaultwarden_version)
+          else
+            CURRENT_VERSION="0.0.0"  # 默认值
+          fi
+          echo "Current vaultwarden version: $CURRENT_VERSION"
+          echo "::set-output name=current_version::$CURRENT_VERSION"  # 输出当前版本
+
+      # Step 5: 比较版本号
+      - name: Compare versions and decide whether to proceed
+        id: compare_versions
+        run: |
+          CURRENT_VERSION="${{ steps.read_version.outputs.current_version }}"
+          LATEST_VERSION="${{ steps.get_version.outputs.latest_version }}"
+          
+          # 使用 sort -V 比较版本号
+          if [ "$(printf '%s\n' "$CURRENT_VERSION" "$LATEST_VERSION" | sort -V | tail -n 1)" != "$CURRENT_VERSION" ]; then
+            echo "Newer version available: $LATEST_VERSION"
+            echo "PROCEED=true" >> $GITHUB_ENV  # 设置环境变量，告知后续步骤继续执行
+          else
+            echo "No update needed. Exiting."
+            echo "PROCEED=false" >> $GITHUB_ENV  # 设置环境变量，告知后续步骤不要执行
+          fi
+
+      # Step 6: 拉取 Vaultwarden Docker 镜像
       - name: Pull Vaultwarden Docker image
+        if: env.PROCEED == 'true'
         run: |
           docker pull docker.io/vaultwarden/server:latest-alpine
 
-      # Step 4: 运行容器并提取二进制文件
+      # Step 7: 运行容器并提取二进制文件
       - name: Extract Vaultwarden binary from Docker image
+        if: env.PROCEED == 'true'
         run: |
           container_id=$(docker create docker.io/vaultwarden/server:latest-alpine)
           docker cp $container_id:/vaultwarden /tmp/vaultwarden
           docker cp $container_id:/web-vault /tmp/web-vault
           docker rm $container_id
 
-      # Step 5: 打包二进制文件
+      # Step 8: 打包二进制文件
       - name: Package Vaultwarden binary
+        if: env.PROCEED == 'true'
         run: |
           tar -czvf vaultwarden-binary.tar.gz -C /tmp vaultwarden web-vault
 
-      # Step 5: 生成当前时间作为版本号
+      # Step 9: 生成当前时间作为版本号
       - name: Generate version number based on current date and time
+        if: env.PROCEED == 'true'
         id: version
         run: |
           VERSION=$(date +'%Y.%m.%d.%H%M')
           echo "VERSION=v$VERSION" >> $GITHUB_ENV
 
-      # Step 6: 创建并发布 GitHub Release 使用 softprops/action-gh-release
+      # Step 10: 创建并发布 GitHub Release 使用 softprops/action-gh-release
       - name: Create GitHub Release and Upload Asset
+        if: env.PROCEED == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: vaultwarden-binary.tar.gz  # 上传的文件
           tag_name: ${{ env.VERSION }}  # 使用当前时间作为版本号
+          body: ""
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub Token 进行身份验证
+
+      # Step 11: 写入文件vaultwarden_version中
+      - name: Write version to file
+        if: env.PROCEED == 'true'
+        run: echo "${{ steps.get_version.outputs.latest_version }}" > vaultwarden_version
+
+      # Step 12: 提交
+      - name: Commit and push changes
+        if: env.PROCEED == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add vaultwarden_version
+          git commit -m "Update Vaultwarden version to ${{ steps.get_version.outputs.latest_version }}"
+          git push
