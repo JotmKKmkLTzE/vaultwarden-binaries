@@ -81,7 +81,7 @@ jobs:
       - name: Package Vaultwarden binary
         if: env.PROCEED == 'true'
         run: |
-          tar -czvf vaultwarden-binary.tar.gz -C /tmp vaultwarden web-vault
+          tar -czvf vaultwarden.tar.gz -C /tmp vaultwarden web-vault
 
       # Step 9: 生成当前时间作为版本号
       - name: Generate version number based on current date and time
@@ -96,7 +96,7 @@ jobs:
         if: env.PROCEED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: vaultwarden-binary.tar.gz  # 上传的文件
+          files: vaultwarden.tar.gz  # 上传的文件
           tag_name: ${{ env.VERSION }}  # 使用当前时间作为版本号
           body: "vaultwarden: v${{env.LATEST_VERSION}}"
         env:
