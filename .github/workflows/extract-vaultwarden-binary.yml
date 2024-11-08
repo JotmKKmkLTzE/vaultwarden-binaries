@@ -6,6 +6,9 @@ on:
     - cron: '30 8 * * *'
   workflow_dispatch: # 允许手动触发工作流
 
+permissions:
+  contents: write  # 允许写入仓库内容
+
 jobs:
   extract-and-publish:
     runs-on: ubuntu-latest
@@ -44,7 +47,7 @@ jobs:
       - name: Generate version number based on current date and time
         id: version
         run: |
-          VERSION=$(date +'%Y%m%d.%H%M')
+          VERSION=$(date +'%Y.%m.%d.%H%M')
           echo "VERSION=v$VERSION" >> $GITHUB_ENV
 
       # Step 6: 创建并发布 GitHub Release 使用 softprops/action-gh-release
