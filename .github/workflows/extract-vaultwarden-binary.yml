@@ -98,7 +98,7 @@ jobs:
         with:
           files: vaultwarden.tar.gz  # 上传的文件
           tag_name: ${{ env.VERSION }}  # 使用当前时间作为版本号
-          body: "vaultwarden: v${{env.LATEST_VERSION}}"
+          body: "**vaultwarden: v${{env.LATEST_VERSION}}**"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub Token 进行身份验证
 
